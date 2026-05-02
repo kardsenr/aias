@@ -1,6 +1,10 @@
+import requests
+import json
+import time
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# ─── RENDER İÇİN WEB SERVER ────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -13,9 +17,6 @@ def run_server():
     HTTPServer(("0.0.0.0", 10000), Handler).serve_forever()
 
 threading.Thread(target=run_server, daemon=True).start()
-import requests
-import json
-import time
 
 # ─── AYARLAR ───────────────────────────────────────────────
 SOSO_API_KEY    = "SOSO-51388f04096541028574f79da0e7264e"
@@ -143,7 +144,7 @@ def main():
 
     offset = None
     son_sinyal = 0
-    SINYAL_ARALIGI = 3600  # Her 1 saatte bir otomatik sinyal
+    SINYAL_ARALIGI = 3600
 
     while True:
         updates = telegram_get_updates(offset)
@@ -175,7 +176,6 @@ def main():
                     CHAT_IDS.discard(chat_id)
                     telegram_send(chat_id, "⛔ Bildirimler durduruldu. /start ile tekrar başlatabilirsin.")
 
-        # Saatlik otomatik sinyal
         if time.time() - son_sinyal > SINYAL_ARALIGI and CHAT_IDS:
             sinyal_gonder()
             son_sinyal = time.time()
@@ -184,3 +184,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
