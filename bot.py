@@ -25,59 +25,25 @@ GROQ_API_KEY   = "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"
 
 CHAT_IDS = set()
 
-COINS = {
-    "BTC": "bitcoin",
-    "ETH": "ethereum",
-    "SOL": "solana",
-    "BNB": "binancecoin",
-    "XRP": "ripple"
-}
-
 # ─── TELEGRAM ──────────────────────────────────────────────
 def telegram_send(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"})
+    try:
+        requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=10)
+    except Exception as e:
+        print(f"Telegram send error: {e}")
 
 def telegram_get_updates(offset=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
     params = {"timeout": 10}
     if offset:
         params["offset"] = offset
-    r = requests.get(url, params=params)
-    return r.json()
-
-# ─── PRICE ─────────────────────────────────────────────────
-def get_price(coin_symbol):
-    coin_id = COINS.get(coin_symbol.upper())
-    if not coin_id:
-        return None, None, None
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true"
     try:
-        r = requests.get(url, timeout=10)
-        data = r.json()
-        price = data[coin_id]["usd"]
-        change = data[coin_id]["usd_24h_change"]
-        mcap = data[coin_id]["usd_market_cap"]
-        return price, change, mcap
+        r = requests.get(url, params=params, timeout=15)
+        return r.json()
     except Exception as e:
-        print(f"Price error: {e}")
-        return None, None, None
-
-def price_message(coin_symbol):
-    price, change, mcap = get_price(coin_symbol)
-    if price is None:
-        return f"❌ {coin_symbol} not found. Supported coins: {', '.join(COINS.keys())}"
-    emoji = "📈" if change > 0 else "📉"
-    sign = "+" if change > 0 else ""
-    return (
-        f"{emoji} <b>{coin_symbol.upper()} Live Price</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💰 Price: <b>${price:,.2f}</b>\n"
-        f"📊 24h Change: <b>{sign}{change:.2f}%</b>\n"
-        f"🏦 Market Cap: ${mcap/1e9:.1f}B\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏰ {time.strftime('%H:%M %d/%m/%Y')}"
-    )
+        print(f"Get updates error: {e}")
+        return {"result": []}
 
 # ─── SOSOValue API ─────────────────────────────────────────
 def get_soso_news():
@@ -85,11 +51,17 @@ def get_soso_news():
     headers = {"x-soso-api-key": SOSO_API_KEY}
     try:
         r = requests.get(url, headers=headers, timeout=10)
+        print(f"News API status: {r.status_code}")
+        print(f"News API response: {r.text[:200]}")
         data = r.json()
         if data.get("code") == 0:
-            return data.get("data", {}).get("list", [])
+            items = data.get("data", {}).get("list", [])
+            print(f"News items found: {len(items)}")
+            return items
+        else:
+            print(f"News API error code: {data.get('code')} msg: {data.get('msg')}")
     except Exception as e:
-        print(f"SoSoValue error: {e}")
+        print(f"SoSoValue news error: {e}")
     return []
 
 def get_soso_etf():
@@ -97,9 +69,11 @@ def get_soso_etf():
     headers = {"x-soso-api-key": SOSO_API_KEY}
     try:
         r = requests.get(url, headers=headers, timeout=10)
+        print(f"ETF API status: {r.status_code}")
+        print(f"ETF API response: {r.text[:200]}")
         return r.json()
     except Exception as e:
-        print(f"ETF data error: {e}")
+        print(f"ETF error: {e}")
     return {}
 
 # ─── GROQ AI ANALYSIS ──────────────────────────────────────
@@ -144,16 +118,17 @@ RISK WARNING: [Short warning]"""
         data = r.json()
         return data["choices"][0]["message"]["content"]
     except Exception as e:
+        print(f"Groq error: {e}")
         return f"AI analysis error: {e}"
 
 # ─── SEND SIGNAL ───────────────────────────────────────────
 def send_signal(chat_ids=None, coin="BTC"):
     if chat_ids is None:
         chat_ids = CHAT_IDS
-    print(f"📡 Fetching {coin} data...")
+    print(f"📡 Fetching data for {coin}...")
     news = get_soso_news()
     etf_data = get_soso_etf()
-    print("🤖 Groq AI analyzing...")
+    print("🤖 Analyzing with Groq AI...")
     analysis = groq_analyze(news, etf_data, coin)
     upper = analysis.upper()
     if "SIGNAL: BUY" in upper:
@@ -178,40 +153,48 @@ def send_signal(chat_ids=None, coin="BTC"):
 # ─── DAILY REPORT ──────────────────────────────────────────
 def send_report(chat_id):
     telegram_send(chat_id, "📊 Preparing daily report, please wait...")
-    price_text = ""
-    for symbol in COINS:
-        price, change, _ = get_price(symbol)
-        if price:
-            sign = "+" if change > 0 else ""
-            trend = "📈" if change > 0 else "📉"
-            price_text += f"{trend} <b>{symbol}:</b> ${price:,.2f} ({sign}{change:.2f}%)\n"
     news = get_soso_news()
     etf_data = get_soso_etf()
-    etf_summary = ""
+
+    # ETF summary
+    etf_text = "No ETF data available"
     if etf_data and etf_data.get("code") == 0:
-        data = etf_data.get("data", {})
-        etf_summary = f"Total Net Flow: ${data.get('totalNetFlow', 'N/A')}"
-    news_headlines = ""
-    for h in news[:3]:
-        content = h.get("multilanguageContent", [])
-        for c in content:
-            if c.get("language") == "en":
-                news_headlines += f"• {c.get('title', '')[:60]}...\n"
-                break
+        d = etf_data.get("data", {})
+        total = d.get("totalNetFlow") or d.get("netFlow") or d.get("total")
+        if total:
+            etf_text = f"BTC ETF Total Net Flow: ${total:,}"
+        else:
+            etf_text = f"ETF data: {str(d)[:100]}"
+
+    # News headlines
+    news_text = "No news available"
+    if news:
+        headlines = []
+        for h in news[:4]:
+            content = h.get("multilanguageContent", [])
+            for c in content:
+                if c.get("language") == "en":
+                    title = c.get("title", "")
+                    if title:
+                        headlines.append(f"• {title[:70]}")
+                    break
+        if headlines:
+            news_text = "\n".join(headlines)
+
     message = (
         f"📋 <b>DAILY CRYPTO REPORT</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💹 <b>Prices</b>\n"
-        f"{price_text if price_text else 'Data unavailable'}\n"
         f"🏦 <b>BTC ETF Data</b>\n"
-        f"{etf_summary if etf_summary else 'Data unavailable'}\n\n"
+        f"{etf_text}\n\n"
         f"📰 <b>Latest News</b>\n"
-        f"{news_headlines if news_headlines else 'No news available'}\n"
+        f"{news_text}\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"⏰ {time.strftime('%H:%M %d/%m/%Y')}\n"
+        f"📊 Source: SoSoValue API\n"
         f"⚠️ This is not financial advice."
     )
     telegram_send(chat_id, message)
+    print(f"✅ Report sent → {chat_id}")
 
 # ─── MAIN LOOP ─────────────────────────────────────────────
 def main():
@@ -241,11 +224,8 @@ def main():
                         "/signal — BTC signal\n"
                         "/signal ETH — ETH signal\n"
                         "/signal SOL — SOL signal\n"
-                        "/price BTC — Live BTC price\n"
-                        "/price ETH — Live ETH price\n"
                         "/report — Daily market report\n"
-                        "/stop — Stop notifications\n\n"
-                        f"💡 Supported coins: {', '.join(COINS.keys())}"
+                        "/stop — Stop notifications"
                     )
                     print(f"New user: {chat_id}")
 
@@ -253,16 +233,8 @@ def main():
                     CHAT_IDS.add(chat_id)
                     parts = text.split()
                     coin = parts[1].upper() if len(parts) > 1 else "BTC"
-                    if coin not in COINS:
-                        telegram_send(chat_id, f"❌ Unsupported coin.\n💡 Options: {', '.join(COINS.keys())}")
-                    else:
-                        telegram_send(chat_id, f"⏳ Analyzing {coin}, please wait...")
-                        send_signal({chat_id}, coin)
-
-                elif text.startswith("/price"):
-                    parts = text.split()
-                    coin = parts[1].upper() if len(parts) > 1 else "BTC"
-                    telegram_send(chat_id, price_message(coin))
+                    telegram_send(chat_id, f"⏳ Analyzing {coin}, please wait...")
+                    send_signal({chat_id}, coin)
 
                 elif text == "/report":
                     send_report(chat_id)
@@ -280,4 +252,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
