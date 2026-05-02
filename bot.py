@@ -19,11 +19,20 @@ def run_server():
 threading.Thread(target=run_server, daemon=True).start()
 
 # ─── SETTINGS ──────────────────────────────────────────────
-SOSO_API_KEY   = "SOSO-d7a143043adf44ce8df0c9ffb3836443"
+SOSO_API_KEY   = "SOSO-51388f04096541028574f79da0e7264e"
 TELEGRAM_TOKEN = "8624209931:AAGncUwPOF9x9m_YI2B63770STcKrFjOVBM"
 GROQ_API_KEY   = "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"
 
 CHAT_IDS = set()
+
+# ─── CACHE (10 dakika) ─────────────────────────────────────
+cache = {
+    "news": [],
+    "etf": {},
+    "news_time": 0,
+    "etf_time": 0,
+}
+CACHE_TTL = 600
 
 # ─── TELEGRAM ──────────────────────────────────────────────
 def telegram_send(chat_id, text):
@@ -45,28 +54,48 @@ def telegram_get_updates(offset=None):
         print(f"Get updates error: {e}")
         return {"result": []}
 
-# ─── SOSOValue API ─────────────────────────────────────────
+# ─── SOSOValue API WITH CACHE ──────────────────────────────
 def get_soso_news():
+    now = time.time()
+    if cache["news"] and (now - cache["news_time"]) < CACHE_TTL:
+        print("Using cached news")
+        return cache["news"]
     url = "https://openapi.sosovalue.com/api/v1/news/featured?pageNum=1&pageSize=5"
     headers = {"x-soso-api-key": SOSO_API_KEY}
     try:
         r = requests.get(url, headers=headers, timeout=10)
+        print(f"News API status: {r.status_code} response: {r.text[:200]}")
         data = r.json()
         if data.get("code") == 0:
-            return data.get("data", {}).get("list", [])
+            items = data.get("data", {}).get("list", [])
+            cache["news"] = items
+            cache["news_time"] = now
+            print(f"News fetched: {len(items)} items")
+            return items
+        else:
+            print(f"News API error code: {data.get('code')} msg: {data.get('msg')}")
     except Exception as e:
         print(f"SoSoValue news error: {e}")
-    return []
+    return cache["news"]
 
 def get_soso_etf():
+    now = time.time()
+    if cache["etf"] and (now - cache["etf_time"]) < CACHE_TTL:
+        print("Using cached ETF data")
+        return cache["etf"]
     url = "https://openapi.sosovalue.com/api/v1/etf/btc/netflow"
     headers = {"x-soso-api-key": SOSO_API_KEY}
     try:
         r = requests.get(url, headers=headers, timeout=10)
-        return r.json()
+        print(f"ETF API status: {r.status_code} response: {r.text[:200]}")
+        data = r.json()
+        cache["etf"] = data
+        cache["etf_time"] = now
+        print("ETF data fetched")
+        return data
     except Exception as e:
         print(f"ETF error: {e}")
-    return {}
+    return cache["etf"]
 
 # ─── GROQ AI ANALYSIS ──────────────────────────────────────
 def groq_analyze(news, etf_data, coin="BTC"):
@@ -117,10 +146,10 @@ RISK WARNING: [Short warning]"""
 def send_signal(chat_ids=None, coin="BTC"):
     if chat_ids is None:
         chat_ids = CHAT_IDS
-    print(f"📡 Fetching data for {coin}...")
+    print(f"Getting data for {coin}...")
     news = get_soso_news()
     etf_data = get_soso_etf()
-    print("🤖 Analyzing with Groq AI...")
+    print("Analyzing with Groq AI...")
     analysis = groq_analyze(news, etf_data, coin)
     upper = analysis.upper()
     if "SIGNAL: BUY" in upper:
@@ -140,12 +169,14 @@ def send_signal(chat_ids=None, coin="BTC"):
     )
     for chat_id in chat_ids:
         telegram_send(chat_id, message)
-        print(f"✅ Signal sent → {chat_id}")
+        print(f"Signal sent → {chat_id}")
 
 # ─── MAIN LOOP ─────────────────────────────────────────────
 def main():
-    print("🚀 SoSoValue Signal Bot started!")
-    print("Send /start to your bot on Telegram\n")
+    print("SoSoValue Signal Bot started!")
+    print("Pre-fetching SoSoValue data...")
+    get_soso_news()
+    get_soso_etf()
 
     offset = None
     last_signal = 0
@@ -172,7 +203,6 @@ def main():
                         "/signalsol — SOL signal\n"
                         "/stop — Stop notifications"
                     )
-                    print(f"New user: {chat_id}")
 
                 elif text == "/signal":
                     CHAT_IDS.add(chat_id)
@@ -193,7 +223,6 @@ def main():
                     CHAT_IDS.discard(chat_id)
                     telegram_send(chat_id, "⛔ Notifications stopped. Send /start to reactivate.")
 
-        # Hourly automatic BTC signal
         if time.time() - last_signal > SIGNAL_INTERVAL and CHAT_IDS:
             send_signal()
             last_signal = time.time()
@@ -202,4 +231,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
