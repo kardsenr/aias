@@ -1,108 +1,178 @@
-import os
 import requests
+import json
 import time
-from groq import Groq
-from telegram import Bot
-import asyncio
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- CONFIGURATION ---
-SOSO_API_KEY = "SOSO-51388f04096541028574f79da0e7264e"
-GROQ_API_KEY = "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"
+# ─── WEB SERVER FOR RENDER ─────────────────────────────────
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+    def log_message(self, format, *args):
+        pass
+
+def run_server():
+    HTTPServer(("0.0.0.0", 10000), Handler).serve_forever()
+
+threading.Thread(target=run_server, daemon=True).start()
+
+# ─── SETTINGS ──────────────────────────────────────────────
+SOSO_API_KEY   = "SOSO-51388f04096541028574f79da0e7264e"
 TELEGRAM_TOKEN = "8624209931:AAGncUwPOF9x9m_YI2B63770STcKrFjOVBM"
-CHAT_ID = "7185850425"
+GROQ_API_KEY   = "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"
 
-# Initialize Clients
-groq_client = Groq(api_key=GROQ_API_KEY)
-bot = Bot(token=TELEGRAM_TOKEN)
+CHAT_IDS = set()
 
-def get_soso_data(ticker):
-    """
-    Fetches real-time market data and AI sentiment from SoSoValue.
-    """
-    url = f"https://api.sosovalue.com/v1/asset/sentiment?symbol={ticker}"
-    headers = {"Authorization": f"Bearer {SOSO_API_KEY}"}
+# ─── TELEGRAM ──────────────────────────────────────────────
+def telegram_send(chat_id, text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"})
+
+def telegram_get_updates(offset=None):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+    params = {"timeout": 10}
+    if offset:
+        params["offset"] = offset
+    r = requests.get(url, params=params)
+    return r.json()
+
+# ─── SOSOValue API ─────────────────────────────────────────
+def get_soso_news():
+    url = "https://openapi.sosovalue.com/api/v1/news/featured?pageNum=1&pageSize=5"
+    headers = {"x-soso-api-key": SOSO_API_KEY}
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        return response.json().get('data', {})
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json()
+        if data.get("code") == 0:
+            return data.get("data", {}).get("list", [])
     except Exception as e:
-        print(f"Error fetching SoSoValue data for {ticker}: {e}")
-        return None
+        print(f"News error: {e}")
+    return []
 
-def generate_ai_analysis(ticker, data):
-    """
-    Generates a professional signal and reasoning using Groq (Llama 3).
-    The output is strictly in English.
-    """
-    score = data.get('sentiment_score', 'N/A')
-    market_context = data.get('analysis_summary', 'No summary available')
-    
-    # Force the AI to stay in English and be professional
-    prompt = f"""
-    Role: Senior Crypto Market Analyst
-    Asset: {ticker}
-    Sentiment Score: {score}/100
-    Context: {market_context}
-
-    Instruction:
-    1. Determine the Signal: BUY, SELL, or HOLD.
-    2. Write a 2-sentence professional reasoning in English.
-    3. Tone: Serious, data-driven, institutional.
-    4. Language: English Only.
-    """
-    
+def get_soso_etf():
+    url = "https://openapi.sosovalue.com/api/v1/etf/btc/netflow"
+    headers = {"x-soso-api-key": SOSO_API_KEY}
     try:
-        completion = groq_client.chat.completions.create(
-            model="llama3-70b-8192",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.4 # Consistent and sharp output
-        )
-        return completion.choices[0].message.content
+        r = requests.get(url, headers=headers, timeout=10)
+        return r.json()
     except Exception as e:
-        return "HOLD\nTechnical analysis is temporarily unavailable. Please monitor market volatility."
+        print(f"ETF error: {e}")
+    return {}
 
-async def send_signals():
-    """
-    Compiles data and sends the formatted signal to the Telegram channel.
-    """
-    assets = ["BTC", "ETH", "SOL"]
-    current_time = time.strftime('%Y-%m-%d %H:%M')
-    
-    for asset in assets:
-        data = get_soso_data(asset)
-        if data:
-            ai_output = generate_ai_analysis(asset, data)
-            
-            # Formatted message with Monospace font for the analysis
-            message = (
-                f"📊 **{asset}/USDT Market Update**\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"📝 **AI ANALYSIS:**\n"
-                f"```\n"
-                f"{ai_output}\n"
-                f"```\n"
-                f"⏰ *Refreshed: {current_time} UTC*\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"⚠️ *Disclaimer: This is not financial advice. Investing in digital assets involves significant risk. Always DYOR.*"
-            )
-            
-            try:
-                await bot.send_message(chat_id=CHAT_ID, text=message, parse_mode='Markdown')
-                print(f"Success: Signal sent for {asset}")
-            except Exception as e:
-                print(f"Telegram Delivery Error: {e}")
-            
-            await asyncio.sleep(5) # Delay to avoid rate limits
+# ─── GROQ AI ANALYSIS ──────────────────────────────────────
+def groq_analyze(news, etf_data):
+    news_text = ""
+    for h in news[:5]:
+        content = h.get("multilanguageContent", [])
+        for c in content:
+            if c.get("language") == "en":
+                news_text += f"- {c.get('title', '')}\n"
+                break
 
-async def main():
-    print("🚀 SoSoValue & Groq Signal Bot is now LIVE...")
+    prompt = f"""You are a professional crypto market analyst.
+Analyze the following latest crypto news and Bitcoin ETF flow data.
+Generate a short and clear trading signal for BTC.
+
+NEWS:
+{news_text if news_text else "No news available"}
+
+ETF DATA:
+{json.dumps(etf_data, indent=2)[:500] if etf_data else "No data available"}
+
+Respond in exactly this format:
+SIGNAL: [BUY / SELL / HOLD]
+COIN: BTC
+CONFIDENCE: [Low / Medium / High]
+REASON: [1-2 sentence explanation]
+RISK WARNING: [Short warning]"""
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "model": "llama-3.3-70b-versatile",
+        "max_tokens": 300,
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    try:
+        r = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                          headers=headers, json=body, timeout=30)
+        data = r.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"AI analysis error: {e}"
+
+# ─── SEND SIGNAL ───────────────────────────────────────────
+def send_signal(chat_ids=None):
+    if chat_ids is None:
+        chat_ids = CHAT_IDS
+    news = get_soso_news()
+    etf_data = get_soso_etf()
+    analysis = groq_analyze(news, etf_data)
+    upper = analysis.upper()
+    if "SIGNAL: BUY" in upper:
+        emoji = "🟢"
+    elif "SIGNAL: SELL" in upper:
+        emoji = "🔴"
+    else:
+        emoji = "🟡"
+    message = (
+        f"{emoji} <b>SOSOVALUE SIGNAL BOT</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{analysis}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏰ {time.strftime('%H:%M %d/%m/%Y')}\n"
+        f"📊 Source: SoSoValue API\n"
+        f"⚠️ This is not financial advice."
+    )
+    for chat_id in chat_ids:
+        telegram_send(chat_id, message)
+
+# ─── MAIN LOOP ─────────────────────────────────────────────
+def main():
+    print("Bot started!")
+    offset = None
+    last_signal = 0
+    SIGNAL_INTERVAL = 3600
+
     while True:
-        await send_signals()
-        print("Cycle complete. Next update in 6 hours.")
-        await asyncio.sleep(21600) # 6-hour interval
+        updates = telegram_get_updates(offset)
+
+        for update in updates.get("result", []):
+            offset = update["update_id"] + 1
+
+            if "message" in update:
+                chat_id = update["message"]["chat"]["id"]
+                text = update["message"].get("text", "")
+
+                if text == "/start":
+                    CHAT_IDS.add(chat_id)
+                    telegram_send(chat_id,
+                        "👋 <b>Welcome to SoSoValue Signal Bot!</b>\n\n"
+                        "📊 AI-powered BTC signals using SoSoValue data.\n\n"
+                        "<b>Commands:</b>\n"
+                        "/signal — BTC trading signal\n"
+                        "/stop — Stop notifications"
+                    )
+
+                elif text == "/signal":
+                    CHAT_IDS.add(chat_id)
+                    telegram_send(chat_id, "⏳ Analyzing BTC, please wait...")
+                    send_signal({chat_id})
+
+                elif text == "/stop":
+                    CHAT_IDS.discard(chat_id)
+                    telegram_send(chat_id, "⛔ Notifications stopped. Send /start to reactivate.")
+
+        if time.time() - last_signal > SIGNAL_INTERVAL and CHAT_IDS:
+            send_signal()
+            last_signal = time.time()
+
+        time.sleep(2)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Process terminated by user.")
+    main()
+        
