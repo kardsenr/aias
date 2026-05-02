@@ -51,15 +51,9 @@ def get_soso_news():
     headers = {"x-soso-api-key": SOSO_API_KEY}
     try:
         r = requests.get(url, headers=headers, timeout=10)
-        print(f"News API status: {r.status_code}")
-        print(f"News API response: {r.text[:200]}")
         data = r.json()
         if data.get("code") == 0:
-            items = data.get("data", {}).get("list", [])
-            print(f"News items found: {len(items)}")
-            return items
-        else:
-            print(f"News API error code: {data.get('code')} msg: {data.get('msg')}")
+            return data.get("data", {}).get("list", [])
     except Exception as e:
         print(f"SoSoValue news error: {e}")
     return []
@@ -69,8 +63,6 @@ def get_soso_etf():
     headers = {"x-soso-api-key": SOSO_API_KEY}
     try:
         r = requests.get(url, headers=headers, timeout=10)
-        print(f"ETF API status: {r.status_code}")
-        print(f"ETF API response: {r.text[:200]}")
         return r.json()
     except Exception as e:
         print(f"ETF error: {e}")
@@ -150,52 +142,6 @@ def send_signal(chat_ids=None, coin="BTC"):
         telegram_send(chat_id, message)
         print(f"✅ Signal sent → {chat_id}")
 
-# ─── DAILY REPORT ──────────────────────────────────────────
-def send_report(chat_id):
-    telegram_send(chat_id, "📊 Preparing daily report, please wait...")
-    news = get_soso_news()
-    etf_data = get_soso_etf()
-
-    # ETF summary
-    etf_text = "No ETF data available"
-    if etf_data and etf_data.get("code") == 0:
-        d = etf_data.get("data", {})
-        total = d.get("totalNetFlow") or d.get("netFlow") or d.get("total")
-        if total:
-            etf_text = f"BTC ETF Total Net Flow: ${total:,}"
-        else:
-            etf_text = f"ETF data: {str(d)[:100]}"
-
-    # News headlines
-    news_text = "No news available"
-    if news:
-        headlines = []
-        for h in news[:4]:
-            content = h.get("multilanguageContent", [])
-            for c in content:
-                if c.get("language") == "en":
-                    title = c.get("title", "")
-                    if title:
-                        headlines.append(f"• {title[:70]}")
-                    break
-        if headlines:
-            news_text = "\n".join(headlines)
-
-    message = (
-        f"📋 <b>DAILY CRYPTO REPORT</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🏦 <b>BTC ETF Data</b>\n"
-        f"{etf_text}\n\n"
-        f"📰 <b>Latest News</b>\n"
-        f"{news_text}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏰ {time.strftime('%H:%M %d/%m/%Y')}\n"
-        f"📊 Source: SoSoValue API\n"
-        f"⚠️ This is not financial advice."
-    )
-    telegram_send(chat_id, message)
-    print(f"✅ Report sent → {chat_id}")
-
 # ─── MAIN LOOP ─────────────────────────────────────────────
 def main():
     print("🚀 SoSoValue Signal Bot started!")
@@ -222,22 +168,26 @@ def main():
                         "📊 AI-powered crypto signals using SoSoValue data.\n\n"
                         "<b>Commands:</b>\n"
                         "/signal — BTC signal\n"
-                        "/signal ETH — ETH signal\n"
-                        "/signal SOL — SOL signal\n"
-                        "/report — Daily market report\n"
+                        "/signaleth — ETH signal\n"
+                        "/signalsol — SOL signal\n"
                         "/stop — Stop notifications"
                     )
                     print(f"New user: {chat_id}")
 
-                elif text.startswith("/signal"):
+                elif text == "/signal":
                     CHAT_IDS.add(chat_id)
-                    parts = text.split()
-                    coin = parts[1].upper() if len(parts) > 1 else "BTC"
-                    telegram_send(chat_id, f"⏳ Analyzing {coin}, please wait...")
-                    send_signal({chat_id}, coin)
+                    telegram_send(chat_id, "⏳ Analyzing BTC, please wait...")
+                    send_signal({chat_id}, "BTC")
 
-                elif text == "/report":
-                    send_report(chat_id)
+                elif text == "/signaleth":
+                    CHAT_IDS.add(chat_id)
+                    telegram_send(chat_id, "⏳ Analyzing ETH, please wait...")
+                    send_signal({chat_id}, "ETH")
+
+                elif text == "/signalsol":
+                    CHAT_IDS.add(chat_id)
+                    telegram_send(chat_id, "⏳ Analyzing SOL, please wait...")
+                    send_signal({chat_id}, "SOL")
 
                 elif text == "/stop":
                     CHAT_IDS.discard(chat_id)
@@ -252,3 +202,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
