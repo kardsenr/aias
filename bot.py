@@ -73,7 +73,7 @@ def get_soso_news():
             print(f"News fetched: {len(items)} items")
             return items
         else:
-            print(f"News API error code: {data.get('code')} msg: {data.get('msg')}")
+            print(f"News API error: {data.get('code')} msg: {data.get('msg')}")
     except Exception as e:
         print(f"SoSoValue news error: {e}")
     return cache["news"]
@@ -98,7 +98,7 @@ def get_soso_etf():
     return cache["etf"]
 
 # ─── GROQ AI ANALYSIS ──────────────────────────────────────
-def groq_analyze(news, etf_data, coin="BTC"):
+def groq_analyze(news, etf_data):
     news_text = ""
     for h in news[:5]:
         content = h.get("multilanguageContent", [])
@@ -109,7 +109,7 @@ def groq_analyze(news, etf_data, coin="BTC"):
 
     prompt = f"""You are a professional crypto market analyst.
 Analyze the following latest crypto news and Bitcoin ETF flow data.
-Generate a short and clear trading signal for {coin}.
+Generate a short and clear trading signal for BTC.
 
 NEWS:
 {news_text if news_text else "No news available"}
@@ -119,7 +119,7 @@ ETF DATA:
 
 Respond in exactly this format:
 SIGNAL: [BUY / SELL / HOLD]
-COIN: {coin}
+COIN: BTC
 CONFIDENCE: [Low / Medium / High]
 REASON: [1-2 sentence explanation]
 RISK WARNING: [Short warning]"""
@@ -143,14 +143,14 @@ RISK WARNING: [Short warning]"""
         return f"AI analysis error: {e}"
 
 # ─── SEND SIGNAL ───────────────────────────────────────────
-def send_signal(chat_ids=None, coin="BTC"):
+def send_signal(chat_ids=None):
     if chat_ids is None:
         chat_ids = CHAT_IDS
-    print(f"Getting data for {coin}...")
+    print("Getting BTC data...")
     news = get_soso_news()
     etf_data = get_soso_etf()
     print("Analyzing with Groq AI...")
-    analysis = groq_analyze(news, etf_data, coin)
+    analysis = groq_analyze(news, etf_data)
     upper = analysis.upper()
     if "SIGNAL: BUY" in upper:
         emoji = "🟢"
@@ -196,28 +196,16 @@ def main():
                     CHAT_IDS.add(chat_id)
                     telegram_send(chat_id,
                         "👋 <b>Welcome to SoSoValue Signal Bot!</b>\n\n"
-                        "📊 AI-powered crypto signals using SoSoValue data.\n\n"
+                        "📊 AI-powered BTC trading signals using SoSoValue data.\n\n"
                         "<b>Commands:</b>\n"
-                        "/signal — BTC signal\n"
-                        "/signaleth — ETH signal\n"
-                        "/signalsol — SOL signal\n"
+                        "/signal — BTC trading signal\n"
                         "/stop — Stop notifications"
                     )
 
                 elif text == "/signal":
                     CHAT_IDS.add(chat_id)
                     telegram_send(chat_id, "⏳ Analyzing BTC, please wait...")
-                    send_signal({chat_id}, "BTC")
-
-                elif text == "/signaleth":
-                    CHAT_IDS.add(chat_id)
-                    telegram_send(chat_id, "⏳ Analyzing ETH, please wait...")
-                    send_signal({chat_id}, "ETH")
-
-                elif text == "/signalsol":
-                    CHAT_IDS.add(chat_id)
-                    telegram_send(chat_id, "⏳ Analyzing SOL, please wait...")
-                    send_signal({chat_id}, "SOL")
+                    send_signal({chat_id})
 
                 elif text == "/stop":
                     CHAT_IDS.discard(chat_id)
@@ -231,3 +219,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
