@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: btc-signal-bot
+    runtime: python
+    pythonVersion: "3.11.0"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: false          # set manually in Render dashboard
+      - key: SOSO_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SIGNAL_CHANNEL
+        sync: false          # optional: @yourchannel or -100xxxxxxx
+      - key: PORT
+        value: "10000"
+    healthCheckPath: /health
+    autoDeploy: true
