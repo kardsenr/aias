@@ -19,7 +19,7 @@ def run_server():
 threading.Thread(target=run_server, daemon=True).start()
 
 # ─── SETTINGS ──────────────────────────────────────────────
-SOSO_API_KEY   = "SOSO-51388f04096541028574f79da0e7264e"
+SOSO_API_KEY   = "SOSO-d7a143043adf44ce8df0c9ffb3836443"
 TELEGRAM_TOKEN = "8624209931:AAGncUwPOF9x9m_YI2B63770STcKrFjOVBM"
 GROQ_API_KEY   = "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"
 
