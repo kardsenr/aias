@@ -4,7 +4,7 @@ import time
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# ─── RENDER İÇİN WEB SERVER ────────────────────────────────
+# ─── WEB SERVER FOR RENDER ─────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -18,12 +18,20 @@ def run_server():
 
 threading.Thread(target=run_server, daemon=True).start()
 
-# ─── AYARLAR ───────────────────────────────────────────────
-SOSO_API_KEY    = "SOSO-51388f04096541028574f79da0e7264e"
-TELEGRAM_TOKEN  = "8624209931:AAGncUwPOF9x9m_YI2B63770STcKrFjOVBM"
-GROQ_API_KEY    = "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"
+# ─── SETTINGS ──────────────────────────────────────────────
+SOSO_API_KEY   = "SOSO-51388f04096541028574f79da0e7264e"
+TELEGRAM_TOKEN = "8624209931:AAGncUwPOF9x9m_YI2B63770STcKrFjOVBM"
+GROQ_API_KEY   = "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"
 
 CHAT_IDS = set()
+
+COINS = {
+    "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "SOL": "solana",
+    "BNB": "binancecoin",
+    "XRP": "ripple"
+}
 
 # ─── TELEGRAM ──────────────────────────────────────────────
 def telegram_send(chat_id, text):
@@ -38,6 +46,39 @@ def telegram_get_updates(offset=None):
     r = requests.get(url, params=params)
     return r.json()
 
+# ─── PRICE ─────────────────────────────────────────────────
+def get_price(coin_symbol):
+    coin_id = COINS.get(coin_symbol.upper())
+    if not coin_id:
+        return None, None, None
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true"
+    try:
+        r = requests.get(url, timeout=10)
+        data = r.json()
+        price = data[coin_id]["usd"]
+        change = data[coin_id]["usd_24h_change"]
+        mcap = data[coin_id]["usd_market_cap"]
+        return price, change, mcap
+    except Exception as e:
+        print(f"Price error: {e}")
+        return None, None, None
+
+def price_message(coin_symbol):
+    price, change, mcap = get_price(coin_symbol)
+    if price is None:
+        return f"❌ {coin_symbol} not found. Supported coins: {', '.join(COINS.keys())}"
+    emoji = "📈" if change > 0 else "📉"
+    sign = "+" if change > 0 else ""
+    return (
+        f"{emoji} <b>{coin_symbol.upper()} Live Price</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 Price: <b>${price:,.2f}</b>\n"
+        f"📊 24h Change: <b>{sign}{change:.2f}%</b>\n"
+        f"🏦 Market Cap: ${mcap/1e9:.1f}B\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏰ {time.strftime('%H:%M %d/%m/%Y')}"
+    )
+
 # ─── SOSOValue API ─────────────────────────────────────────
 def get_soso_news():
     url = "https://openapi.sosovalue.com/api/v1/news/featured?pageNum=1&pageSize=5"
@@ -48,7 +89,7 @@ def get_soso_news():
         if data.get("code") == 0:
             return data.get("data", {}).get("list", [])
     except Exception as e:
-        print(f"SoSoValue hata: {e}")
+        print(f"SoSoValue error: {e}")
     return []
 
 def get_soso_etf():
@@ -58,35 +99,35 @@ def get_soso_etf():
         r = requests.get(url, headers=headers, timeout=10)
         return r.json()
     except Exception as e:
-        print(f"ETF veri hata: {e}")
+        print(f"ETF data error: {e}")
     return {}
 
-# ─── GROQ AI ANALİZ ────────────────────────────────────────
-def groq_analiz(haberler, etf_data):
-    haber_metni = ""
-    for h in haberler[:5]:
-        icerik = h.get("multilanguageContent", [])
-        for c in icerik:
+# ─── GROQ AI ANALYSIS ──────────────────────────────────────
+def groq_analyze(news, etf_data, coin="BTC"):
+    news_text = ""
+    for h in news[:5]:
+        content = h.get("multilanguageContent", [])
+        for c in content:
             if c.get("language") == "en":
-                haber_metni += f"- {c.get('title', '')}\n"
+                news_text += f"- {c.get('title', '')}\n"
                 break
 
-    prompt = f"""Sen bir kripto piyasa analisti asistanısın.
-Aşağıdaki güncel kripto haberlerini ve Bitcoin ETF akış verisini analiz et.
-Kısa ve net bir trading sinyali üret.
+    prompt = f"""You are a professional crypto market analyst.
+Analyze the following latest crypto news and Bitcoin ETF flow data.
+Generate a short and clear trading signal for {coin}.
 
-HABERLER:
-{haber_metni if haber_metni else "Haber alınamadı"}
+NEWS:
+{news_text if news_text else "No news available"}
 
-ETF VERİSİ:
-{json.dumps(etf_data, indent=2)[:500] if etf_data else "Veri alınamadı"}
+ETF DATA:
+{json.dumps(etf_data, indent=2)[:500] if etf_data else "No data available"}
 
-Tam olarak şu formatta yanıt ver:
-SİNYAL: [AL / SAT / BEKLE]
-COIN: [BTC / ETH / GENEL]
-GÜVEN: [Düşük / Orta / Yüksek]
-SEBEP: [1-2 cümle açıklama]
-RİSK UYARISI: [Kısa uyarı]"""
+Respond in exactly this format:
+SIGNAL: [BUY / SELL / HOLD]
+COIN: {coin}
+CONFIDENCE: [Low / Medium / High]
+REASON: [1-2 sentence explanation]
+RISK WARNING: [Short warning]"""
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -97,54 +138,89 @@ RİSK UYARISI: [Kısa uyarı]"""
         "max_tokens": 300,
         "messages": [{"role": "user", "content": prompt}]
     }
-
     try:
         r = requests.post("https://api.groq.com/openai/v1/chat/completions",
                           headers=headers, json=body, timeout=30)
         data = r.json()
         return data["choices"][0]["message"]["content"]
     except Exception as e:
-        return f"AI analiz hatası: {e}"
+        return f"AI analysis error: {e}"
 
-# ─── SİNYAL GÖNDER ─────────────────────────────────────────
-def sinyal_gonder():
-    print("📡 Veri çekiliyor...")
-    haberler = get_soso_news()
+# ─── SEND SIGNAL ───────────────────────────────────────────
+def send_signal(chat_ids=None, coin="BTC"):
+    if chat_ids is None:
+        chat_ids = CHAT_IDS
+    print(f"📡 Fetching {coin} data...")
+    news = get_soso_news()
     etf_data = get_soso_etf()
-
-    print("🤖 Groq AI analiz ediyor...")
-    analiz = groq_analiz(haberler, etf_data)
-
-    upper = analiz.upper()
-    if "SİNYAL: AL" in upper or "SINYAL: AL" in upper:
+    print("🤖 Groq AI analyzing...")
+    analysis = groq_analyze(news, etf_data, coin)
+    upper = analysis.upper()
+    if "SIGNAL: BUY" in upper:
         emoji = "🟢"
-    elif "SİNYAL: SAT" in upper or "SINYAL: SAT" in upper:
+    elif "SIGNAL: SELL" in upper:
         emoji = "🔴"
     else:
         emoji = "🟡"
-
-    mesaj = (
-        f"{emoji} <b>SOSOVALUE SİNYAL BOTU</b>\n"
+    message = (
+        f"{emoji} <b>SOSOVALUE SIGNAL BOT</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{analiz}\n"
+        f"{analysis}\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"⏰ {time.strftime('%H:%M %d/%m/%Y')}\n"
-        f"📊 Kaynak: SoSoValue API\n"
-        f"⚠️ Bu bir yatırım tavsiyesi değildir."
+        f"📊 Source: SoSoValue API\n"
+        f"⚠️ This is not financial advice."
     )
+    for chat_id in chat_ids:
+        telegram_send(chat_id, message)
+        print(f"✅ Signal sent → {chat_id}")
 
-    for chat_id in CHAT_IDS:
-        telegram_send(chat_id, mesaj)
-        print(f"✅ Sinyal gönderildi → {chat_id}")
+# ─── DAILY REPORT ──────────────────────────────────────────
+def send_report(chat_id):
+    telegram_send(chat_id, "📊 Preparing daily report, please wait...")
+    price_text = ""
+    for symbol in COINS:
+        price, change, _ = get_price(symbol)
+        if price:
+            sign = "+" if change > 0 else ""
+            trend = "📈" if change > 0 else "📉"
+            price_text += f"{trend} <b>{symbol}:</b> ${price:,.2f} ({sign}{change:.2f}%)\n"
+    news = get_soso_news()
+    etf_data = get_soso_etf()
+    etf_summary = ""
+    if etf_data and etf_data.get("code") == 0:
+        data = etf_data.get("data", {})
+        etf_summary = f"Total Net Flow: ${data.get('totalNetFlow', 'N/A')}"
+    news_headlines = ""
+    for h in news[:3]:
+        content = h.get("multilanguageContent", [])
+        for c in content:
+            if c.get("language") == "en":
+                news_headlines += f"• {c.get('title', '')[:60]}...\n"
+                break
+    message = (
+        f"📋 <b>DAILY CRYPTO REPORT</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💹 <b>Prices</b>\n"
+        f"{price_text if price_text else 'Data unavailable'}\n"
+        f"🏦 <b>BTC ETF Data</b>\n"
+        f"{etf_summary if etf_summary else 'Data unavailable'}\n\n"
+        f"📰 <b>Latest News</b>\n"
+        f"{news_headlines if news_headlines else 'No news available'}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏰ {time.strftime('%H:%M %d/%m/%Y')}\n"
+        f"⚠️ This is not financial advice."
+    )
+    telegram_send(chat_id, message)
 
-# ─── ANA DÖNGÜ ─────────────────────────────────────────────
+# ─── MAIN LOOP ─────────────────────────────────────────────
 def main():
-    print("🚀 SoSoValue Sinyal Botu başlatıldı!")
-    print("Telegram'da botuna /start yaz\n")
+    print("🚀 SoSoValue Signal Bot started!")
+    print("Send /start to your bot on Telegram\n")
 
     offset = None
-    son_sinyal = 0
-    SINYAL_ARALIGI = 3600
+    last_signal = 0
+    SIGNAL_INTERVAL = 3600
 
     while True:
         updates = telegram_get_updates(offset)
@@ -154,31 +230,51 @@ def main():
 
             if "message" in update:
                 chat_id = update["message"]["chat"]["id"]
-                text = update["message"].get("text", "")
+                text = update["message"].get("text", "").strip()
 
                 if text == "/start":
                     CHAT_IDS.add(chat_id)
                     telegram_send(chat_id,
-                        "👋 <b>SoSoValue Sinyal Botuna Hoş Geldin!</b>\n\n"
-                        "📊 SoSoValue verileriyle saatlik sinyal gönderirim.\n\n"
-                        "Komutlar:\n"
-                        "/sinyal — Hemen analiz al\n"
-                        "/stop — Bildirimleri durdur"
+                        "👋 <b>Welcome to SoSoValue Signal Bot!</b>\n\n"
+                        "📊 AI-powered crypto signals using SoSoValue data.\n\n"
+                        "<b>Commands:</b>\n"
+                        "/signal — BTC signal\n"
+                        "/signal ETH — ETH signal\n"
+                        "/signal SOL — SOL signal\n"
+                        "/price BTC — Live BTC price\n"
+                        "/price ETH — Live ETH price\n"
+                        "/report — Daily market report\n"
+                        "/stop — Stop notifications\n\n"
+                        f"💡 Supported coins: {', '.join(COINS.keys())}"
                     )
-                    print(f"Yeni kullanıcı: {chat_id}")
+                    print(f"New user: {chat_id}")
 
-                elif text == "/sinyal":
+                elif text.startswith("/signal"):
                     CHAT_IDS.add(chat_id)
-                    telegram_send(chat_id, "⏳ Analiz yapılıyor, bekle...")
-                    sinyal_gonder()
+                    parts = text.split()
+                    coin = parts[1].upper() if len(parts) > 1 else "BTC"
+                    if coin not in COINS:
+                        telegram_send(chat_id, f"❌ Unsupported coin.\n💡 Options: {', '.join(COINS.keys())}")
+                    else:
+                        telegram_send(chat_id, f"⏳ Analyzing {coin}, please wait...")
+                        send_signal({chat_id}, coin)
+
+                elif text.startswith("/price"):
+                    parts = text.split()
+                    coin = parts[1].upper() if len(parts) > 1 else "BTC"
+                    telegram_send(chat_id, price_message(coin))
+
+                elif text == "/report":
+                    send_report(chat_id)
 
                 elif text == "/stop":
                     CHAT_IDS.discard(chat_id)
-                    telegram_send(chat_id, "⛔ Bildirimler durduruldu. /start ile tekrar başlatabilirsin.")
+                    telegram_send(chat_id, "⛔ Notifications stopped. Send /start to reactivate.")
 
-        if time.time() - son_sinyal > SINYAL_ARALIGI and CHAT_IDS:
-            sinyal_gonder()
-            son_sinyal = time.time()
+        # Hourly automatic BTC signal
+        if time.time() - last_signal > SIGNAL_INTERVAL and CHAT_IDS:
+            send_signal()
+            last_signal = time.time()
 
         time.sleep(2)
 
