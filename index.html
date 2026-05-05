@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AiaSignal Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #FAF8F5;
+    --white: #FFFFFF;
+    --ink: #14110F;
+    --ink-soft: #3D3530;
+    --ink-muted: #9A8E88;
+    --gold: #C9922A;
+    --gold-light: #F7EDD8;
+    --green: #1E6E42;
+    --green-light: #E4F4EC;
+    --red: #B03030;
+    --red-light: #FAEAEA;
+    --border: #EAE4DC;
+    --shadow: rgba(20,17,15,0.07);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 68px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 16px var(--shadow);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    object-fit: cover;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+
+  .logo-text {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text span { color: var(--gold); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--green-light);
+    color: var(--green);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  .last-updated {
+    font-size: 12px;
+    color: var(--ink-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* MAIN */
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  /* PAGE TITLE */
+  .page-title {
+    margin-bottom: 1.8rem;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .page-title h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.8px;
+    line-height: 1.1;
+  }
+
+  .page-title p {
+    color: var(--ink-muted);
+    font-size: 14px;
+    margin-top: 6px;
+    font-weight: 400;
+  }
+
+  /* SIGNAL BANNER */
+  .signal-banner {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 1.6rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 20px var(--shadow);
+    animation: fadeUp 0.5s 0.1s ease both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .signal-banner::after {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: -40px;
+    width: 140px;
+    height: 140px;
+    background: var(--gold-light);
+    border-radius: 50%;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .signal-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1;
+  }
+
+  .signal-emoji {
+    font-size: 2.8rem;
+    line-height: 1;
+  }
+
+  .signal-info h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.3px;
+  }
+
+  .signal-info p {
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin-top: 3px;
+    font-weight: 400;
+    max-width: 400px;
+  }
+
+  .signal-right {
+    text-align: right;
+    z-index: 1;
+  }
+
+  .signal-badge {
+    display: inline-block;
+    padding: 7px 18px;
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 2px;
+  }
+
+  .signal-badge.buy { background: var(--green-light); color: var(--green); }
+  .signal-badge.sell { background: var(--red-light); color: var(--red); }
+  .signal-badge.hold { background: var(--gold-light); color: var(--gold); }
+
+  .signal-score {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 5px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* GRID */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  @media (max-width: 700px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .signal-banner { flex-direction: column; gap: 1rem; text-align: center; }
+    .signal-right { text-align: center; }
+    .signal-info p { max-width: 100%; }
+  }
+
+  /* CARD */
+  .card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px var(--shadow);
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .card:nth-child(1) { animation-delay: 0.2s; }
+  .card:nth-child(2) { animation-delay: 0.3s; }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.2rem;
+  }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--gold-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+  }
+
+  .card-badge {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-muted);
+    background: var(--cream);
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+
+  /* ETF STATS */
+  .etf-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .etf-stat {
+    background: var(--cream);
+    border-radius: 12px;
+    padding: 1rem;
+  }
+
+  .etf-stat-label {
+    font-size: 11px;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 500;
+    margin-bottom: 5px;
+  }
+
+  .etf-stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .etf-stat-value.positive { color: var(--green); }
+  .etf-stat-value.negative { color: var(--red); }
+
+  .etf-stat-sub {
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin-top: 3px;
+  }
+
+  .flow-bar-wrap { margin-top: 1rem; }
+
+  .flow-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .flow-bar {
+    height: 8px;
+    background: var(--cream);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .flow-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1.2s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .flow-bar-fill.positive { background: var(--green); }
+  .flow-bar-fill.negative { background: var(--red); }
+
+  /* NEWS */
+  .news-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  .news-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .news-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .news-item:hover { opacity: 0.65; }
+
+  .news-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--gold);
+    min-width: 22px;
+    padding-top: 2px;
+    font-weight: 500;
+  }
+
+  .news-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.45;
+    margin-bottom: 3px;
+  }
+
+  .news-meta {
+    font-size: 11px;
+    color: var(--ink-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* LOADING */
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    gap: 10px;
+    color: var(--ink-muted);
+    font-size: 13px;
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--ink-muted);
+    font-size: 13px;
+  }
+
+  .error-msg span { display: block; font-size: 24px; margin-bottom: 8px; }
+
+  /* BOTTOM */
+  .bottom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .tg-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--ink);
+    color: var(--cream);
+    text-decoration: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: opacity 0.2s;
+    margin-top: 8px;
+  }
+
+  .tg-link:hover { opacity: 0.8; }
+
+  .refresh-btn {
+    background: var(--white);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+
+  .refresh-btn:hover { background: var(--cream); }
+  .refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* FOOTER */
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--ink-muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+
+  footer a { color: var(--gold); text-decoration: none; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <img src="logo.png" alt="AiaSignal" class="logo-img">
+    <div class="logo-text">Aia<span>Signal</span></div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE
+    </div>
+    <div class="last-updated" id="lastUpdated">—</div>
+  </div>
+</header>
+
+<main>
+  <div class="page-title">
+    <h1>BTC Market Dashboard</h1>
+    <p>Powered by SoSoValue API · Real-time Bitcoin ETF flow & market intelligence</p>
+  </div>
+
+  <div class="signal-banner">
+    <div class="signal-left">
+      <div class="signal-emoji" id="signalEmoji">⏳</div>
+      <div class="signal-info">
+        <h2 id="signalTitle">Analyzing market...</h2>
+        <p id="signalReason">Fetching SoSoValue data, please wait</p>
+      </div>
+    </div>
+    <div class="signal-right">
+      <div class="signal-badge hold" id="signalBadge">LOADING</div>
+      <div class="signal-score" id="signalTime">—</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <div class="card-icon">📊</div>
+          BTC ETF Flow
+        </div>
+        <div class="card-badge">SoSoValue</div>
+      </div>
+      <div id="etfContent">
+        <div class="loading"><div class="spinner"></div>Loading ETF data...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <div class="card-icon">📰</div>
+          Latest News
+        </div>
+        <div class="card-badge">SoSoValue</div>
+      </div>
+      <div id="newsContent">
+        <div class="loading"><div class="spinner"></div>Loading news...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div>
+      <p style="font-size:12px; color:var(--ink-muted);">⚠️ Not financial advice. For informational purposes only.</p>
+      <a href="https://t.me/AiaSignalBot" target="_blank" class="tg-link">🤖 Get signals on Telegram</a>
+    </div>
+    <button class="refresh-btn" onclick="loadAll()" id="refreshBtn">↻ Refresh</button>
+  </div>
+</main>
+
+<footer>
+  Built for <strong>SoSoValue Buildathon</strong> ·
+  <a href="https://t.me/AiaSignalBot" target="_blank">@AiaSignalBot</a> ·
+  <a href="https://github.com/kardsenr/aias" target="_blank">GitHub</a>
+</footer>
+
+<script>
+const SOSO_KEY = "SOSO-51388f04096541028574f79da0e7264e";
+
+async function fetchETF() {
+  const res = await fetch("https://openapi.sosovalue.com/api/v1/etf/btc/netflow", {
+    headers: { "x-soso-api-key": SOSO_KEY }
+  });
+  return await res.json();
+}
+
+async function fetchNews() {
+  const res = await fetch("https://openapi.sosovalue.com/api/v1/news/featured?pageNum=1&pageSize=6", {
+    headers: { "x-soso-api-key": SOSO_KEY }
+  });
+  return await res.json();
+}
+
+function renderETF(data) {
+  const el = document.getElementById("etfContent");
+  if (!data || data.code !== 0) {
+    el.innerHTML = `<div class="error-msg"><span>⚠️</span>ETF data unavailable.<br>API limit may be reached.</div>`;
+    return;
+  }
+  const d = data.data || {};
+  const netFlow = d.netFlow ?? d.totalNetFlow ?? null;
+  const totalAum = d.totalAum ?? d.aum ?? null;
+  const isPositive = netFlow > 0;
+  el.innerHTML = `
+    <div class="etf-stats">
+      <div class="etf-stat">
+        <div class="etf-stat-label">Net Flow Today</div>
+        <div class="etf-stat-value ${netFlow === null ? '' : isPositive ? 'positive' : 'negative'}">
+          ${netFlow !== null ? (isPositive ? '+' : '') + formatM(netFlow) : 'N/A'}
+        </div>
+        <div class="etf-stat-sub">${isPositive ? '🟢 Inflow' : '🔴 Outflow'}</div>
+      </div>
+      <div class="etf-stat">
+        <div class="etf-stat-label">Total AUM</div>
+        <div class="etf-stat-value">${totalAum ? formatB(totalAum) : 'N/A'}</div>
+        <div class="etf-stat-sub">Assets Under Mgmt</div>
+      </div>
+    </div>
+    <div class="flow-bar-wrap">
+      <div class="flow-bar-label"><span>Outflow</span><span>Inflow</span></div>
+      <div class="flow-bar">
+        <div class="flow-bar-fill ${isPositive ? 'positive' : 'negative'}"
+             style="width:${netFlow !== null ? Math.min(Math.abs(netFlow)/1e8*100,100) : 50}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderNews(data) {
+  const el = document.getElementById("newsContent");
+  if (!data || data.code !== 0) {
+    el.innerHTML = `<div class="error-msg"><span>📭</span>News unavailable.<br>API limit may be reached.</div>`;
+    updateSignal(null); return;
+  }
+  const list = data.data?.list || [];
+  if (!list.length) {
+    el.innerHTML = `<div class="error-msg"><span>📭</span>No news found.</div>`;
+    updateSignal(null); return;
+  }
+  let html = '<div class="news-list">';
+  list.slice(0,5).forEach((item,i) => {
+    const content = item.multilanguageContent || [];
+    const en = content.find(c => c.language==='en') || content[0] || {};
+    const title = en.title || 'No title';
+    const time = item.publishTime ? new Date(item.publishTime).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'}) : '';
+    html += `<div class="news-item">
+      <div class="news-num">0${i+1}</div>
+      <div><div class="news-title">${title}</div><div class="news-meta">${time}</div></div>
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+  updateSignal(list);
+}
+
+function updateSignal(list) {
+  if (!list || !list.length) {
+    document.getElementById("signalEmoji").textContent = "⚠️";
+    document.getElementById("signalTitle").textContent = "Insufficient data";
+    document.getElementById("signalReason").textContent = "SoSoValue API limit reached — try again later";
+    document.getElementById("signalBadge").textContent = "N/A";
+    document.getElementById("signalBadge").className = "signal-badge hold";
+    return;
+  }
+  const titles = list.map(n => {
+    const c = n.multilanguageContent || [];
+    const en = c.find(x=>x.language==='en') || c[0] || {};
+    return (en.title||'').toLowerCase();
+  }).join(' ');
+  const bullish = ['surge','rally','bullish','buy','adoption','approval','inflow','rise','gain','record','high','growth','positive'];
+  const bearish = ['crash','drop','bearish','sell','ban','hack','outflow','fall','loss','low','decline','fear','negative'];
+  let score = 50;
+  bullish.forEach(w => { if(titles.includes(w)) score += 8; });
+  bearish.forEach(w => { if(titles.includes(w)) score -= 8; });
+  score = Math.max(0, Math.min(100, score));
+  let signal, emoji, cls, reason;
+  if (score >= 65) { signal='BUY'; emoji='🟢'; cls='buy'; reason='Positive sentiment detected in latest market news.'; }
+  else if (score <= 35) { signal='SELL'; emoji='🔴'; cls='sell'; reason='Negative sentiment detected in latest market news.'; }
+  else { signal='HOLD'; emoji='🟡'; cls='hold'; reason='Mixed signals — no clear directional trend detected.'; }
+  document.getElementById("signalEmoji").textContent = emoji;
+  document.getElementById("signalTitle").textContent = `BTC Signal: ${signal}`;
+  document.getElementById("signalReason").textContent = reason;
+  document.getElementById("signalBadge").textContent = signal;
+  document.getElementById("signalBadge").className = `signal-badge ${cls}`;
+  document.getElementById("signalTime").textContent = `Score: ${score}/100`;
+}
+
+function formatM(n) {
+  if (Math.abs(n)>=1e9) return (n/1e9).toFixed(2)+'B';
+  if (Math.abs(n)>=1e6) return (n/1e6).toFixed(1)+'M';
+  return n?.toLocaleString()||'N/A';
+}
+function formatB(n) {
+  if (n>=1e9) return '$'+(n/1e9).toFixed(1)+'B';
+  if (n>=1e6) return '$'+(n/1e6).toFixed(1)+'M';
+  return '$'+n?.toLocaleString();
+}
+
+async function loadAll() {
+  const btn = document.getElementById("refreshBtn");
+  btn.disabled = true; btn.textContent = "Loading...";
+  document.getElementById("lastUpdated").textContent = "Updating...";
+  try {
+    const [etfData, newsData] = await Promise.all([fetchETF(), fetchNews()]);
+    renderETF(etfData);
+    renderNews(newsData);
+    document.getElementById("lastUpdated").textContent =
+      new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) { console.error(e); }
+  btn.disabled = false; btn.textContent = "↻ Refresh";
+}
+
+loadAll();
+setInterval(loadAll, 600000);
+</script>
+</body>
+</html>
